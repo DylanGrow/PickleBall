@@ -1,18 +1,21 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGameState } from './hooks/useGameState';
-import { useVoiceControl } from './hooks/useVoiceControl';
+import { useAnnouncer } from './hooks/useAnnouncer';
 import { ScorePanel } from './components/ScorePanel';
 import { CourtDiagram } from './components/CourtDiagram';
 import { SettingsModal } from './components/SettingsModal';
-import { VoiceFeedback } from './components/VoiceFeedback';
 import type { PlayerNames } from './types/game';
 
 export default function App() {
   const { state, dispatch } = useGameState();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const announcer = useAnnouncer();
 
   const { current, gameOver, winner, winScore, playerNames, history } = state;
   const { teamA, teamB, serve } = current;
+
+  // Track previous state to detect changes for announcements
+  const prevRef = useRef(current);
 
   const handleScoreA = useCallback(() => {
     dispatch({ type: 'SCORE_POINT', team: 'teamA' });
@@ -40,15 +43,38 @@ export default function App() {
     [dispatch]
   );
 
-  // Voice control — pass team names so custom names can be spoken
-  const voice = useVoiceControl({
-    onScoreA: handleScoreA,
-    onScoreB: handleScoreB,
-    onUndo: handleUndo,
-    onReset: () => { dispatch({ type: 'RESET' }); },
-    teamAName: playerNames.teamAPlayer1,
-    teamBName: playerNames.teamBPlayer1,
-  });
+  // Announce score changes
+  useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = current;
+
+    // Skip the initial render
+    if (prev === current) return;
+
+    if (gameOver && winner) {
+      const winnerLabel = winner === 'teamA' ? 'Team A' : 'Team B';
+      announcer.announceGameOver(winnerLabel);
+      return;
+    }
+
+    // Detect side-out: serving team changed
+    const sideOut = prev.serve.servingTeam !== current.serve.servingTeam;
+
+    if (sideOut) {
+      announcer.announceSideOut();
+      // Announce new score after a short delay
+      setTimeout(() => {
+        const servingScore = serve.servingTeam === 'teamA' ? teamA.score : teamB.score;
+        const receivingScore = serve.servingTeam === 'teamA' ? teamB.score : teamA.score;
+        announcer.announceScore(servingScore, receivingScore, serve.serverNumber, current.isFirstServe);
+      }, 800);
+    } else {
+      // Score changed — announce immediately
+      const servingScore = serve.servingTeam === 'teamA' ? teamA.score : teamB.score;
+      const receivingScore = serve.servingTeam === 'teamA' ? teamB.score : teamA.score;
+      announcer.announceScore(servingScore, receivingScore, serve.serverNumber, current.isFirstServe);
+    }
+  }, [current, gameOver, winner, serve, teamA, teamB, announcer]);
 
   const winnerLabel = winner === 'teamA' ? 'Team A' : 'Team B';
   const servingTeamData = serve.servingTeam === 'teamA' ? teamA : teamB;
@@ -84,32 +110,30 @@ export default function App() {
               {'Rally #' + String(current.rallyCount)}
             </span>
 
-            {/* Mic / Voice toggle button */}
-            {voice.isSupported && (
+            {/* Announcer toggle button */}
+            {announcer.isSupported && (
               <button
                 type="button"
-                onClick={voice.toggleListening}
+                onClick={announcer.toggle}
                 className={`p-2 rounded-lg transition-colors ${
-                  voice.status === 'listening'
-                    ? 'text-red-400 bg-red-950/60 hover:bg-red-900/60 ring-1 ring-red-500'
-                    : voice.status === 'processing'
-                    ? 'text-yellow-300 bg-yellow-950/60'
+                  announcer.isEnabled
+                    ? 'text-yellow-300 bg-yellow-950/60 hover:bg-yellow-900/60'
                     : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
                 }`}
-                aria-label={voice.status === 'listening' ? 'Stop voice control' : 'Start voice control'}
-                title={voice.status === 'listening' ? 'Stop listening' : 'Voice control'}
+                aria-label={announcer.isEnabled ? 'Disable announcer' : 'Enable announcer'}
+                title={announcer.isEnabled ? 'Announcer ON' : 'Announcer OFF'}
               >
-                {voice.status === 'listening' ? (
-                  /* Waveform / recording icon */
+                {announcer.isEnabled ? (
+                  /* Speaker on icon */
                   <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden="true">
-                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+                    <path d="M10 3.75a.75.75 0 00-1.264-.546L4.703 7H3.167a.75.75 0 00-.7.48A6.985 6.985 0 002 10c0 .887.165 1.737.468 2.52.111.29.39.48.7.48h1.535l4.033 3.796A.75.75 0 0010 16.25V3.75zM15.95 5.05a.75.75 0 00-1.06 1.06 5.5 5.5 0 010 7.78.75.75 0 001.06 1.06 7 7 0 000-9.9z" />
+                    <path d="M13.829 7.172a.75.75 0 00-1.061 1.06 2.5 2.5 0 010 3.536.75.75 0 001.06 1.06 4 4 0 000-5.656z" />
                   </svg>
                 ) : (
-                  /* Mic-off icon */
+                  /* Speaker off icon */
                   <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden="true">
-                    <path d="M10 2a3 3 0 00-3 3v3.586l6.707 6.707A3 3 0 0013 8V5a3 3 0 00-3-3z" />
-                    <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.793-1.793A5.972 5.972 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-7.146 3.647L5.857 12.15A4.483 4.483 0 005.5 10v-.357a.75.75 0 00-1.5 0V10c0 1.33.434 2.56 1.17 3.55L3.28 15.44a.75.75 0 101.06 1.06l.44-.439A5.972 5.972 0 004 10v-.357a.75.75 0 00-1.5 0V10c0 1.905.703 3.645 1.858 4.978l-1.079 1.08a.75.75 0 001.06 1.06l14.5-14.5a.75.75 0 00-1.06-1.06L17.5 3.28A5.972 5.972 0 0010 2.5V2zM7 5a3 3 0 015.854-.868L7 10.586V5z" />
+                    <path d="M10 3.75a.75.75 0 00-1.264-.546L4.703 7H3.167a.75.75 0 00-.7.48A6.985 6.985 0 002 10c0 .887.165 1.737.468 2.52.111.29.39.48.7.48h1.535l4.033 3.796A.75.75 0 0010 16.25V3.75z" />
+                    <path d="M14.22 7.22a.75.75 0 011.06 0L17 8.94l1.72-1.72a.75.75 0 111.06 1.06L18.06 10l1.72 1.72a.75.75 0 11-1.06 1.06L17 11.06l-1.72 1.72a.75.75 0 11-1.06-1.06L15.94 10l-1.72-1.72a.75.75 0 010-1.06z" />
                   </svg>
                 )}
               </button>
@@ -213,25 +237,6 @@ export default function App() {
 
         <p className="text-center text-zinc-700 text-xs pb-4">Add to home screen for offline use</p>
       </main>
-
-      {/* Voice commands cheat-sheet — shown when listening */}
-      {voice.status === 'listening' && (
-        <div className="fixed bottom-4 right-4 z-40 bg-zinc-900/95 backdrop-blur border border-zinc-700 rounded-xl p-3 text-xs text-zinc-400 shadow-2xl max-w-[200px]">
-          <p className="font-bold text-zinc-300 mb-1.5 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block" />
-            Voice commands
-          </p>
-          <ul className="space-y-0.5">
-            <li>"point A" / "team A"</li>
-            <li>"point B" / "team B"</li>
-            <li>"undo" / "go back"</li>
-            <li>"reset" / "new game"</li>
-          </ul>
-        </div>
-      )}
-
-      {/* Floating voice feedback toast */}
-      <VoiceFeedback status={voice.status} lastCommand={voice.lastCommand} />
 
       <SettingsModal
         open={settingsOpen}
