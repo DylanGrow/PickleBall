@@ -1,0 +1,4 @@
+# Pickleball Scorekeeper — robots.txt
+User-agent: *
+Allow: /
+Sitemap: https://dylangrow.github.io/pickleball-pwa/sitemap.xml

@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/pickleball-pwa/sw.js', { scope: '/pickleball-pwa/' })})}
