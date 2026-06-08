@@ -1,6 +1,6 @@
 # Pickleball Scorekeeper — GitHub Actions CI/CD
-# Deploys the pre-built dist/ folder to GitHub Pages on every push to main.
-# dist/ is committed directly so no build step is needed here.
+# Deploys the pre-built docs/ folder to GitHub Pages on every push to main.
+# docs/ is committed directly — no CI build step needed.
 
 name: Deploy to GitHub Pages
 
@@ -32,7 +32,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ./docs
 
       - name: Deploy to GitHub Pages
         id: deployment

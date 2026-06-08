@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/pickleball-pwa/',
+  base: '/PickleBall/',
   plugins: [
     react(),
     VitePWA({
@@ -24,8 +24,8 @@ export default defineConfig({
         background_color: '#052e16',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/pickleball-pwa/',
-        scope: '/pickleball-pwa/',
+        start_url: '/PickleBall/',
+        scope: '/PickleBall/',
         icons: [
           {
             src: 'icons/icon-192.svg',
@@ -49,6 +49,8 @@ export default defineConfig({
     })
   ],
   build: {
+    outDir: 'docs',
+    emptyOutDir: true,
     target: 'es2020',
     minify: 'terser',
     sourcemap: false,

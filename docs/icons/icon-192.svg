@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Background -->
+  <rect width="192" height="192" rx="36" fill="#052e16"/>
+  <!-- Pickleball -->
+  <circle cx="96" cy="96" r="72" fill="#16a34a"/>
+  <!-- Ball seam lines -->
+  <path d="M96 40 C72 40 48 64 48 96" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M96 40 C120 40 144 64 144 96" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M48 96 C48 120 72 152 96 152" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M144 96 C144 120 120 152 96 152" stroke="white" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- Center hole -->
+  <circle cx="96" cy="96" r="12" fill="white"/>
+</svg>
