@@ -16,6 +16,10 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  button, [role="button"] {
+    touch-action: manipulation;
+  }
+
   html {
     /* Prevent text-size inflation on mobile rotation */
     -webkit-text-size-adjust: 100%;

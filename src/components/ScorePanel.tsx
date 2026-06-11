@@ -33,14 +33,26 @@ export function ScorePanel({
     ? 'bg-green-600 hover:bg-green-500 active:bg-green-700 focus-visible:ring-green-400'
     : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 focus-visible:ring-blue-400';
 
+  const hoverClass = team.id === 'teamA'
+    ? 'hover:bg-green-900/50 hover:border-green-500'
+    : 'hover:bg-blue-900/50 hover:border-blue-500';
+
   return (
-    <div
+    <button
+      type="button"
+      onClick={onScore}
+      disabled={gameOver}
       className={`
-        relative flex flex-col items-center gap-3 p-4 rounded-2xl border-2
+        relative flex flex-col items-center gap-3 p-4 rounded-2xl border-2 w-full text-center
+        transition-all duration-75 active:scale-95 cursor-pointer
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900
+        disabled:cursor-not-allowed disabled:active:scale-100
         ${colorClass}
+        ${hoverClass}
         ${isServing ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-zinc-900' : ''}
         ${isWinner ? 'ring-4 ring-yellow-300' : ''}
       `}
+      aria-label={`Score point for ${teamLabel}. Current score: ${String(team.score)}`}
     >
       {/* Serving indicator */}
       {isServing && (
@@ -75,7 +87,7 @@ export function ScorePanel({
       {/* Score — huge, sunlight-readable */}
       <div
         className="text-8xl font-black tabular-nums text-white leading-none select-none"
-        aria-label={`Score: ${String(team.score)}`}
+        aria-hidden="true"
       >
         {String(team.score)}
       </div>
@@ -113,22 +125,17 @@ export function ScorePanel({
         </div>
       </div>
 
-      {/* Score button */}
-      <button
-        type="button"
-        onClick={onScore}
-        disabled={gameOver}
+      {/* Score button representation */}
+      <div
         className={`
-          w-full py-4 rounded-xl font-black text-white text-lg uppercase tracking-widest
-          transition-all duration-75 active:scale-95
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900
-          disabled:opacity-30 disabled:cursor-not-allowed disabled:active:scale-100
+          w-full py-4 rounded-xl font-black text-white text-lg uppercase tracking-widest text-center
+          disabled:opacity-30 transition-colors
           ${btnClass}
+          ${gameOver ? 'opacity-30' : ''}
         `}
-        aria-label={`Score point for ${teamLabel}`}
       >
         {'+1 Point'}
-      </button>
-    </div>
+      </div>
+    </button>
   );
 }

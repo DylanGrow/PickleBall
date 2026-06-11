@@ -34,12 +34,15 @@ export function useAnnouncer() {
   const safeSay = useCallback((text: string) => {
     if (!isSupported) return;
 
-    // Debounce: don't overlap rapid calls (Edge crash prevention)
-    if (speakingRef.current) return;
+    // Clear any pending speak timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
 
     try {
       const synth = window.speechSynthesis;
-      // Cancel safely — some Edge versions throw on cancel()
+      // Cancel active speech to allow override
       try { synth.cancel(); } catch { /* ignore */ }
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -54,7 +57,7 @@ export function useAnnouncer() {
       // Small delay before speaking — Edge needs a tick after cancel()
       timeoutRef.current = setTimeout(() => {
         try { synth.speak(utterance); } catch { speakingRef.current = false; }
-      }, 50);
+      }, 60);
     } catch {
       speakingRef.current = false;
     }

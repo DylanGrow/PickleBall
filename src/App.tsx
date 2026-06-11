@@ -6,6 +6,16 @@ import { CourtDiagram } from './components/CourtDiagram';
 import { SettingsModal } from './components/SettingsModal';
 import type { PlayerNames } from './types/game';
 
+function triggerHaptic() {
+  if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(40);
+    } catch {
+      // ignore haptics failures on unsupported browsers
+    }
+  }
+}
+
 export default function App() {
   const { state, dispatch } = useGameState();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -18,22 +28,88 @@ export default function App() {
   const prevRef = useRef(current);
 
   const handleScoreA = useCallback(() => {
+    triggerHaptic();
     dispatch({ type: 'SCORE_POINT', team: 'teamA' });
   }, [dispatch]);
 
   const handleScoreB = useCallback(() => {
+    triggerHaptic();
     dispatch({ type: 'SCORE_POINT', team: 'teamB' });
   }, [dispatch]);
 
   const handleUndo = useCallback(() => {
+    triggerHaptic();
     dispatch({ type: 'UNDO' });
   }, [dispatch]);
 
   const handleReset = useCallback(() => {
-    if (window.confirm('Reset the game? This cannot be undone.')) {
+    const isGameFresh = teamA.score === 0 && teamB.score === 0 && history.length === 0;
+    if (gameOver || isGameFresh || window.confirm('Reset the game? This cannot be undone.')) {
+      triggerHaptic();
       dispatch({ type: 'RESET' });
     }
-  }, [dispatch]);
+  }, [dispatch, gameOver, teamA.score, teamB.score, history.length]);
+
+  // Screen Wake Lock API to prevent device sleeping during games
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let wakeLock: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn('Wake Lock request failed:', err);
+      }
+    };
+
+    const handleVisibilityChange = async () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    };
+
+    requestWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
+
+  // Global keyboard shortcuts for tabletop/referee control
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === '1' || key === 'a') {
+        if (!gameOver) handleScoreA();
+      } else if (key === '2' || key === 'b') {
+        if (!gameOver) handleScoreB();
+      } else if (key === 'u') {
+        if (history.length > 0) handleUndo();
+      } else if (key === 'r') {
+        handleReset();
+      } else if (key === 's') {
+        setSettingsOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gameOver, history.length, handleScoreA, handleScoreB, handleUndo, handleReset]);
 
   const handleSaveSettings = useCallback(
     (names: PlayerNames, score: number) => {
@@ -90,8 +166,8 @@ export default function App() {
   })();
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <header className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col safe-area-bottom">
+      <header className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 safe-area-top">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 24 24" className="w-7 h-7" aria-hidden="true">

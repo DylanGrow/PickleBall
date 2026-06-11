@@ -14,8 +14,7 @@ function sanitizeName(raw: string): string {
   return raw
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // strip control chars
-    .slice(0, 24)
-    .trim();
+    .slice(0, 24);
 }
 
 export function SettingsModal({
@@ -47,7 +46,13 @@ export function SettingsModal({
   }, [onClose]);
 
   const handleSave = useCallback(() => {
-    onSave(names, score);
+    const trimmedNames = Object.freeze({
+      teamAPlayer1: names.teamAPlayer1.trim(),
+      teamAPlayer2: names.teamAPlayer2.trim(),
+      teamBPlayer1: names.teamBPlayer1.trim(),
+      teamBPlayer2: names.teamBPlayer2.trim(),
+    });
+    onSave(trimmedNames, score);
     onClose();
   }, [names, score, onSave, onClose]);
 
@@ -90,7 +95,7 @@ export function SettingsModal({
 
       <div className="p-5 flex flex-col gap-5">
         {/* Team A */}
-        <fieldset className="border border-green-800 rounded-xl p-4">
+        <fieldset className="border border-green-700 rounded-xl p-4">
           <legend className="text-green-400 text-xs font-bold uppercase tracking-widest px-2">
             {'Team A'}
           </legend>
@@ -121,7 +126,7 @@ export function SettingsModal({
         </fieldset>
 
         {/* Team B */}
-        <fieldset className="border border-blue-800 rounded-xl p-4">
+        <fieldset className="border border-blue-700 rounded-xl p-4">
           <legend className="text-blue-400 text-xs font-bold uppercase tracking-widest px-2">
             {'Team B'}
           </legend>
