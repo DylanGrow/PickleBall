@@ -239,6 +239,7 @@ export default function App() {
       </main>
 
       <SettingsModal
+        key={settingsOpen ? 'open' : 'closed'}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         currentNames={playerNames}

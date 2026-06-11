@@ -12,6 +12,7 @@ interface SettingsModalProps {
 /** Safely sanitize player name input — strip control chars, limit length */
 function sanitizeName(raw: string): string {
   return raw
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // strip control chars
     .slice(0, 24)
     .trim();
@@ -28,13 +29,7 @@ export function SettingsModal({
   const [score, setScore] = useState(winScore);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  // Sync when modal opens
-  useEffect(() => {
-    if (open) {
-      setNames(currentNames);
-      setScore(winScore);
-    }
-  }, [open, currentNames, winScore]);
+
 
   // Focus trap using native <dialog>
   useEffect(() => {

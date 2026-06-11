@@ -20,6 +20,7 @@ function initState(): PersistedGame {
 
 export function useGameState(): GameView {
   const [state, dispatchRaw] = useReducer(gameReducer, undefined, initState);
+  const { current } = state;
 
   // Persist on every state change
   useEffect(() => {
@@ -31,22 +32,22 @@ export function useGameState(): GameView {
   }, []);
 
   const derived = useMemo(() => {
-    const servingPlayer = getServingPlayer(state.current);
-    const teamA = state.current.teamA;
-    const teamB = state.current.teamB;
+    const servingPlayer = getServingPlayer(current);
+    const teamA = current.teamA;
+    const teamB = current.teamB;
 
     // Server names for display
     const teamAServerName =
-      state.current.serve.servingTeam === 'teamA'
+      current.serve.servingTeam === 'teamA'
         ? servingPlayer.name
-        : `${state.current.serve.serverNumber === 1
+        : `${current.serve.serverNumber === 1
             ? teamA.player1.name
             : teamA.player2.name}`;
 
     const teamBServerName =
-      state.current.serve.servingTeam === 'teamB'
+      current.serve.servingTeam === 'teamB'
         ? servingPlayer.name
-        : `${state.current.serve.serverNumber === 1
+        : `${current.serve.serverNumber === 1
             ? teamB.player1.name
             : teamB.player2.name}`;
 
@@ -55,7 +56,7 @@ export function useGameState(): GameView {
       teamAServerName,
       teamBServerName,
     };
-  }, [state]);
+  }, [current]);
 
   return {
     state,
