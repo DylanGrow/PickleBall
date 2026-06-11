@@ -63,15 +63,23 @@ export function gameReducer(
 
     case 'RESET': {
       const names = state.playerNames ?? DEFAULT_NAMES;
-      return buildInitialPersistedGame(names, state.winScore);
+      const initial = buildInitialPersistedGame(names, state.winScore);
+      return Object.freeze({
+        ...initial,
+        teamAColor: state.teamAColor ?? 'green',
+        teamBColor: state.teamBColor ?? 'blue',
+      });
     }
 
     case 'SET_NAMES': {
       const newSnapshot = buildInitialSnapshot(action.names);
+      const initial = buildInitialPersistedGame(action.names, state.winScore);
       return Object.freeze({
-        ...buildInitialPersistedGame(action.names, state.winScore),
+        ...initial,
         playerNames: Object.freeze(action.names),
         winScore: state.winScore,
+        teamAColor: state.teamAColor ?? 'green',
+        teamBColor: state.teamBColor ?? 'blue',
         current: newSnapshot,
         history: Object.freeze([] as const),
         createdAt: now,
@@ -84,6 +92,15 @@ export function gameReducer(
       return Object.freeze({
         ...state,
         winScore: validScore,
+        updatedAt: now,
+      });
+    }
+
+    case 'SET_COLORS': {
+      return Object.freeze({
+        ...state,
+        teamAColor: action.teamAColor,
+        teamBColor: action.teamBColor,
         updatedAt: now,
       });
     }

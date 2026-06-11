@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { useAnnouncer } from './hooks/useAnnouncer';
 import { ScorePanel } from './components/ScorePanel';
 import { CourtDiagram } from './components/CourtDiagram';
 import { SettingsModal } from './components/SettingsModal';
-import type { PlayerNames } from './types/game';
+import type { PlayerNames, TeamColor, CompletedMatch } from './types/game';
+import { COLOR_THEMES, loadMatchHistory, saveMatchHistory } from './logic/game';
 
 function triggerHaptic() {
   if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -19,10 +20,14 @@ function triggerHaptic() {
 export default function App() {
   const { state, dispatch } = useGameState();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'scorer' | 'history' | 'stats'>('scorer');
+  const [matches, setMatches] = useState<readonly CompletedMatch[]>(() => loadMatchHistory());
   const announcer = useAnnouncer();
 
   const { current, gameOver, winner, winScore, playerNames, history } = state;
   const { teamA, teamB, serve } = current;
+  const teamAColor = state.teamAColor ?? 'green';
+  const teamBColor = state.teamBColor ?? 'blue';
 
   // Track previous state to detect changes for announcements
   const prevRef = useRef(current);
@@ -49,6 +54,60 @@ export default function App() {
       dispatch({ type: 'RESET' });
     }
   }, [dispatch, gameOver, teamA.score, teamB.score, history.length]);
+
+  // Auto-save completed match to history list
+  useEffect(() => {
+    if (gameOver && winner) {
+      const matchExists = matches.some((m) => m.id === state.createdAt);
+      if (!matchExists) {
+        const newMatch: CompletedMatch = {
+          id: state.createdAt,
+          date: new Date(state.createdAt).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          teamAPlayer1: playerNames.teamAPlayer1,
+          teamAPlayer2: playerNames.teamAPlayer2,
+          teamBPlayer1: playerNames.teamBPlayer1,
+          teamBPlayer2: playerNames.teamBPlayer2,
+          teamAScore: teamA.score,
+          teamBScore: teamB.score,
+          winner,
+        };
+        const updated = Object.freeze([...matches, newMatch]);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setMatches(updated);
+        saveMatchHistory(updated);
+      }
+    }
+  }, [gameOver, winner, state.createdAt, playerNames, teamA.score, teamB.score, matches]);
+
+  const handleDeleteMatch = useCallback((id: string) => {
+    if (window.confirm('Delete this match from history?')) {
+      const updated = Object.freeze(matches.filter((m) => m.id !== id));
+      setMatches(updated);
+      saveMatchHistory(updated);
+    }
+  }, [matches]);
+
+  const handleClearHistory = useCallback(() => {
+    if (window.confirm('Clear ALL match history? This cannot be undone.')) {
+      setMatches([]);
+      saveMatchHistory([]);
+    }
+  }, []);
+
+  const handleSaveSettings = useCallback(
+    (names: PlayerNames, score: number, aColor: TeamColor, bColor: TeamColor) => {
+      dispatch({ type: 'SET_NAMES', names });
+      dispatch({ type: 'SET_WIN_SCORE', score });
+      dispatch({ type: 'SET_COLORS', teamAColor: aColor, teamBColor: bColor });
+    },
+    [dispatch]
+  );
 
   // Screen Wake Lock API to prevent device sleeping during games
   useEffect(() => {
@@ -111,13 +170,58 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gameOver, history.length, handleScoreA, handleScoreB, handleUndo, handleReset]);
 
-  const handleSaveSettings = useCallback(
-    (names: PlayerNames, score: number) => {
-      dispatch({ type: 'SET_NAMES', names });
-      dispatch({ type: 'SET_WIN_SCORE', score });
-    },
-    [dispatch]
-  );
+  // Compute stats on match history dynamically
+  const playerStats = useMemo(() => {
+    const statsMap: Record<string, { wins: number; losses: number; games: number; points: number }> = {};
+
+    const addPlayerStats = (name: string, isWinner: boolean, points: number) => {
+      const cleanName = name.trim();
+      if (!cleanName) return;
+      if (!statsMap[cleanName]) {
+        statsMap[cleanName] = { wins: 0, losses: 0, games: 0, points: 0 };
+      }
+      statsMap[cleanName].games += 1;
+      statsMap[cleanName].points += points;
+      if (isWinner) {
+        statsMap[cleanName].wins += 1;
+      } else {
+        statsMap[cleanName].losses += 1;
+      }
+    };
+
+    matches.forEach((m) => {
+      addPlayerStats(m.teamAPlayer1, m.winner === 'teamA', m.teamAScore);
+      addPlayerStats(m.teamAPlayer2, m.winner === 'teamA', m.teamAScore);
+      addPlayerStats(m.teamBPlayer1, m.winner === 'teamB', m.teamBScore);
+      addPlayerStats(m.teamBPlayer2, m.winner === 'teamB', m.teamBScore);
+    });
+
+    return Object.entries(statsMap)
+      .map(([name, data]) => ({
+        name,
+        ...data,
+        winRate: data.games > 0 ? (data.wins / data.games) * 100 : 0,
+        avgPoints: data.games > 0 ? data.points / data.games : 0,
+      }))
+      .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
+  }, [matches]);
+
+  // Dynamic live rules helper values
+  const rulesCheck = useMemo(() => {
+    const servingTeamData = serve.servingTeam === 'teamA' ? teamA : teamB;
+    const serverPlayer =
+      servingTeamData.player1.id === serve.servingPlayerId
+        ? servingTeamData.player1
+        : servingTeamData.player2;
+
+    const correctSide = servingTeamData.score % 2 === 0 ? 'right' : 'left';
+
+    return {
+      serverName: serverPlayer.name,
+      side: correctSide,
+      isFirstServeRule: current.isFirstServe,
+    };
+  }, [serve, teamA, teamB, current.isFirstServe]);
 
   // Announce score changes
   useEffect(() => {
@@ -191,7 +295,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={announcer.toggle}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`p-2 rounded-lg transition-colors cursor-pointer ${
                   announcer.isEnabled
                     ? 'text-yellow-300 bg-yellow-950/60 hover:bg-yellow-900/60'
                     : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
@@ -219,7 +323,7 @@ export default function App() {
               type="button"
               onClick={handleUndo}
               disabled={history.length === 0}
-              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
               aria-label="Undo last point"
               title="Undo"
             >
@@ -230,7 +334,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleReset}
-              className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors cursor-pointer"
               aria-label="Reset game"
               title="Reset"
             >
@@ -241,7 +345,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors cursor-pointer"
               aria-label="Open settings"
               title="Settings"
             >
@@ -256,60 +360,245 @@ export default function App() {
       {gameOver && (
         <div role="alert" className="bg-yellow-400 text-zinc-900 text-center py-3 font-black text-lg tracking-wide">
           {'🏆 ' + winnerLabel + ' wins ' + String(teamA.score) + '–' + String(teamB.score) + '! '}
-          <button type="button" onClick={handleReset} className="underline ml-2 hover:no-underline">
+          <button type="button" onClick={handleReset} className="underline ml-2 hover:no-underline cursor-pointer">
             New Game
           </button>
         </div>
       )}
 
-      <div className="bg-zinc-900 border-b border-zinc-800 py-2 px-4">
-        <p className="text-center text-xs text-yellow-300 font-semibold max-w-2xl mx-auto">
-          {'⚡ ' + serveInfo + (current.isFirstServe ? ' (First serve — no Server 1)' : '')}
-        </p>
-      </div>
+      {activeTab === 'scorer' && (
+        <div className="bg-zinc-900 border-b border-zinc-800 py-2 px-4">
+          <p className="text-center text-xs text-yellow-300 font-semibold max-w-2xl mx-auto">
+            {'⚡ ' + serveInfo + (current.isFirstServe ? ' (First serve — no Server 1)' : '')}
+          </p>
+        </div>
+      )}
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-5 flex flex-col gap-5">
-        <div className="grid grid-cols-2 gap-4">
-          <ScorePanel
-            team={teamA}
-            serve={serve}
-            isWinner={gameOver && winner === 'teamA'}
-            gameOver={gameOver}
-            onScore={handleScoreA}
-          />
-          <ScorePanel
-            team={teamB}
-            serve={serve}
-            isWinner={gameOver && winner === 'teamB'}
-            gameOver={gameOver}
-            onScore={handleScoreB}
-          />
+        {/* Navigation tabs */}
+        <div className="flex justify-center border-b border-zinc-800 pb-2" role="tablist">
+          {(['scorer', 'history', 'stats'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2 text-center text-xs font-black uppercase tracking-wider transition-colors border-b-2 cursor-pointer ${
+                activeTab === tab
+                  ? 'border-yellow-400 text-yellow-300'
+                  : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
 
-        <p className="text-center text-zinc-600 text-xs">
-          {'Win at ' + String(winScore) + ' • win by 2'}
-        </p>
+        {activeTab === 'scorer' && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <ScorePanel
+                team={teamA}
+                serve={serve}
+                isWinner={gameOver && winner === 'teamA'}
+                gameOver={gameOver}
+                colorTheme={COLOR_THEMES[teamAColor]}
+                onScore={handleScoreA}
+              />
+              <ScorePanel
+                team={teamB}
+                serve={serve}
+                isWinner={gameOver && winner === 'teamB'}
+                gameOver={gameOver}
+                colorTheme={COLOR_THEMES[teamBColor]}
+                onScore={handleScoreB}
+              />
+            </div>
 
-        <section aria-label="Court positions">
-          <h2 className="text-zinc-500 text-xs uppercase tracking-widest text-center mb-3 font-semibold">
-            Court Positions
-          </h2>
-          <CourtDiagram teamA={teamA} teamB={teamB} serve={serve} />
-        </section>
+            <p className="text-center text-zinc-600 text-xs">
+              {'Win at ' + String(winScore) + ' • win by 2'}
+            </p>
 
-        <section aria-label="Quick rules reference" className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
-          <h2 className="text-zinc-400 text-xs uppercase tracking-widest font-bold mb-3">
-            Scoring Rules
-          </h2>
-          <ul className="text-zinc-400 text-xs space-y-1.5" role="list">
-            <li>→ Points only scored by the serving team</li>
-            <li>→ Win rally while serving: score + keep serve (switch sides)</li>
-            <li>→ Win rally while receiving: side-out (no score)</li>
-            <li>→ Side-out: Server 1 → Server 2 → opponent's Server 1</li>
-            <li>→ Game starts at Team B, Server 2 (no Server 1 first)</li>
-            <li>→ Players on right (even) side when team score is even</li>
-          </ul>
-        </section>
+            <section aria-label="Court positions">
+              <h2 className="text-zinc-500 text-xs uppercase tracking-widest text-center mb-3 font-semibold">
+                Court Positions
+              </h2>
+              <CourtDiagram
+                teamA={teamA}
+                teamB={teamB}
+                serve={serve}
+                teamAColorHex={COLOR_THEMES[teamAColor].hex}
+                teamBColorHex={COLOR_THEMES[teamBColor].hex}
+              />
+            </section>
+
+            {/* Interactive Rules Assistant */}
+            <section aria-label="Interactive Rules Assistant" className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
+              <h3 className="text-yellow-400 text-xs uppercase tracking-widest font-black flex items-center gap-1.5 mb-2.5">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                </svg>
+                Live Court Rules Check
+              </h3>
+              <div className="text-zinc-300 text-xs space-y-2">
+                <p>
+                  📢 <strong>Position Check:</strong> <span className="text-white font-bold">{rulesCheck.serverName}</span> must serve from the <span className="text-yellow-400 font-bold">{rulesCheck.side}</span> side.
+                </p>
+                <p>
+                  💡 <strong>Double-Bounce Rule:</strong> The receiving team must let the serve bounce once. The serving team must let the returned ball bounce once. Volleys are only allowed after these two bounces!
+                </p>
+                {rulesCheck.isFirstServeRule && (
+                  <p className="text-yellow-300/90 italic">
+                    ℹ️ <strong>First Serve Exception:</strong> To balance the game, the team serving first only gets one server (Server 2). A side-out will occur immediately on their first fault.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section aria-label="Quick rules reference" className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
+              <h2 className="text-zinc-400 text-xs uppercase tracking-widest font-bold mb-3">
+                Scoring Rules
+              </h2>
+              <ul className="text-zinc-400 text-xs space-y-1.5" role="list">
+                <li>→ Points only scored by the serving team</li>
+                <li>→ Win rally while serving: score + keep serve (switch sides)</li>
+                <li>→ Win rally while receiving: side-out (no score)</li>
+                <li>→ Side-out: Server 1 → Server 2 → opponent's Server 1</li>
+                <li>→ Game starts at Team B, Server 2 (no Server 1 first)</li>
+                <li>→ Players on right (even) side when team score is even</li>
+              </ul>
+            </section>
+          </>
+        )}
+
+        {activeTab === 'history' && (
+          <section aria-label="Match History" className="flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Completed Matches</h2>
+              {matches.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  className="text-xs text-red-400 hover:text-red-300 font-bold hover:underline cursor-pointer"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            {matches.length === 0 ? (
+              <div className="text-center py-10 bg-zinc-900 rounded-xl border border-zinc-800">
+                <p className="text-zinc-500 text-sm">No matches in history yet.</p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('scorer')}
+                  className="mt-3 px-4 py-2 rounded-xl bg-yellow-400 text-zinc-900 font-black text-xs hover:bg-yellow-300 cursor-pointer"
+                >
+                  Play First Match
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {[...matches].reverse().map((m) => (
+                  <div
+                    key={m.id}
+                    className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3 relative"
+                  >
+                    <div className="flex justify-between items-center text-[10px] text-zinc-500 border-b border-zinc-800/60 pb-1.5">
+                      <span>{m.date}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMatch(m.id)}
+                        className="text-red-500 hover:text-red-400 font-bold cursor-pointer"
+                        aria-label="Delete match from history"
+                      >
+                        Delete
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 items-center">
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-[10px] uppercase font-black tracking-wider ${COLOR_THEMES[teamAColor].text}`}>
+                          Team A {m.winner === 'teamA' && '🏆'}
+                        </span>
+                        <span className="text-zinc-200 text-xs font-semibold truncate">
+                          {m.teamAPlayer1} & {m.teamAPlayer2}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1 text-right">
+                        <span className={`text-[10px] uppercase font-black tracking-wider ${COLOR_THEMES[teamBColor].text}`}>
+                          Team B {m.winner === 'teamB' && '🏆'}
+                        </span>
+                        <span className="text-zinc-200 text-xs font-semibold truncate">
+                          {m.teamBPlayer1} & {m.teamBPlayer2}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-4 py-1">
+                      <span className={`text-3xl font-black ${m.winner === 'teamA' ? 'text-white' : 'text-zinc-500'}`}>
+                        {m.teamAScore}
+                      </span>
+                      <span className="text-zinc-600 font-bold text-sm">—</span>
+                      <span className={`text-3xl font-black ${m.winner === 'teamB' ? 'text-white' : 'text-zinc-500'}`}>
+                        {m.teamBScore}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {activeTab === 'stats' && (
+          <section aria-label="Player Statistics" className="flex flex-col gap-4">
+            <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider border-b border-zinc-800 pb-2">
+              Leaderboard & Stats
+            </h2>
+
+            {playerStats.length === 0 ? (
+              <div className="text-center py-10 bg-zinc-900 rounded-xl border border-zinc-800">
+                <p className="text-zinc-500 text-sm">Play matches to calculate player stats!</p>
+              </div>
+            ) : (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-zinc-800/50 text-zinc-400 font-bold uppercase tracking-wider border-b border-zinc-800">
+                        <th className="p-3">Player</th>
+                        <th className="p-3 text-center">Played</th>
+                        <th className="p-3 text-center">Wins</th>
+                        <th className="p-3 text-center">Losses</th>
+                        <th className="p-3 text-center">Win Rate</th>
+                        <th className="p-3 text-center">Avg Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {playerStats.map((stat, idx) => (
+                        <tr key={stat.name} className="hover:bg-zinc-800/30 transition-colors">
+                          <td className="p-3 font-bold text-white flex items-center gap-1.5">
+                            {idx === 0 && <span aria-hidden="true">👑</span>}
+                            {stat.name}
+                          </td>
+                          <td className="p-3 text-center text-zinc-300">{stat.games}</td>
+                          <td className="p-3 text-center text-green-400 font-semibold">{stat.wins}</td>
+                          <td className="p-3 text-center text-red-400">{stat.losses}</td>
+                          <td className="p-3 text-center font-black text-yellow-300">
+                            {stat.winRate.toFixed(0)}%
+                          </td>
+                          <td className="p-3 text-center text-zinc-400">{stat.avgPoints.toFixed(1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         <p className="text-center text-zinc-700 text-xs pb-4">Add to home screen for offline use</p>
       </main>
@@ -320,6 +609,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         currentNames={playerNames}
         winScore={winScore}
+        teamAColor={teamAColor}
+        teamBColor={teamBColor}
         onSave={handleSaveSettings}
       />
     </div>

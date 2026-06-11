@@ -1,12 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { PlayerNames } from '../types/game';
+import type { PlayerNames, TeamColor } from '../types/game';
 
 interface SettingsModalProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly currentNames: PlayerNames;
   readonly winScore: number;
-  readonly onSave: (names: PlayerNames, winScore: number) => void;
+  readonly teamAColor: TeamColor;
+  readonly teamBColor: TeamColor;
+  readonly onSave: (names: PlayerNames, winScore: number, teamAColor: TeamColor, teamBColor: TeamColor) => void;
 }
 
 /** Safely sanitize player name input — strip control chars, limit length */
@@ -22,13 +24,15 @@ export function SettingsModal({
   onClose,
   currentNames,
   winScore,
+  teamAColor,
+  teamBColor,
   onSave,
 }: SettingsModalProps) {
   const [names, setNames] = useState<PlayerNames>(currentNames);
   const [score, setScore] = useState(winScore);
+  const [aColor, setAColor] = useState<TeamColor>(teamAColor);
+  const [bColor, setBColor] = useState<TeamColor>(teamBColor);
   const dialogRef = useRef<HTMLDialogElement>(null);
-
-
 
   // Focus trap using native <dialog>
   useEffect(() => {
@@ -52,9 +56,9 @@ export function SettingsModal({
       teamBPlayer1: names.teamBPlayer1.trim(),
       teamBPlayer2: names.teamBPlayer2.trim(),
     });
-    onSave(trimmedNames, score);
+    onSave(trimmedNames, score, aColor, bColor);
     onClose();
-  }, [names, score, onSave, onClose]);
+  }, [names, score, aColor, bColor, onSave, onClose]);
 
   const setName = useCallback(
     (field: keyof PlayerNames, raw: string) => {
@@ -122,6 +126,28 @@ export function SettingsModal({
                 aria-label="Team A Player 2 name"
               />
             </label>
+            <div className="flex flex-col gap-1 mt-1">
+              <span className="text-zinc-400 text-[10px] uppercase tracking-wider">{'Team Color'}</span>
+              <div className="flex gap-2.5 mt-1">
+                {(['green', 'red', 'purple', 'orange'] as const).map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setAColor(color)}
+                    className={`
+                      w-7 h-7 rounded-full border-2 transition-all duration-75 active:scale-90 cursor-pointer
+                      ${color === 'green' ? 'bg-green-600 border-green-400' : ''}
+                      ${color === 'red' ? 'bg-red-600 border-red-400' : ''}
+                      ${color === 'purple' ? 'bg-purple-600 border-purple-400' : ''}
+                      ${color === 'orange' ? 'bg-orange-600 border-orange-400' : ''}
+                      ${aColor === color ? 'ring-2 ring-yellow-400 scale-110 shadow-lg' : 'opacity-70'}
+                    `}
+                    aria-label={`Select ${color} for Team A`}
+                    aria-pressed={aColor === color}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </fieldset>
 
@@ -153,6 +179,28 @@ export function SettingsModal({
                 aria-label="Team B Player 2 name"
               />
             </label>
+            <div className="flex flex-col gap-1 mt-1">
+              <span className="text-zinc-400 text-[10px] uppercase tracking-wider">{'Team Color'}</span>
+              <div className="flex gap-2.5 mt-1">
+                {(['blue', 'amber', 'rose', 'indigo'] as const).map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setBColor(color)}
+                    className={`
+                      w-7 h-7 rounded-full border-2 transition-all duration-75 active:scale-90 cursor-pointer
+                      ${color === 'blue' ? 'bg-blue-600 border-blue-400' : ''}
+                      ${color === 'amber' ? 'bg-amber-600 border-amber-400' : ''}
+                      ${color === 'rose' ? 'bg-rose-600 border-rose-400' : ''}
+                      ${color === 'indigo' ? 'bg-indigo-600 border-indigo-400' : ''}
+                      ${bColor === color ? 'ring-2 ring-yellow-400 scale-110 shadow-lg' : 'opacity-70'}
+                    `}
+                    aria-label={`Select ${color} for Team B`}
+                    aria-pressed={bColor === color}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </fieldset>
 

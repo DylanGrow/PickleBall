@@ -49,6 +49,20 @@ export interface GameSnapshot {
   readonly isFirstServe: boolean;
 }
 
+export type TeamColor = 'green' | 'blue' | 'red' | 'purple' | 'orange' | 'amber' | 'rose' | 'indigo';
+
+export interface CompletedMatch {
+  readonly id: string;
+  readonly date: string;
+  readonly teamAPlayer1: string;
+  readonly teamAPlayer2: string;
+  readonly teamBPlayer1: string;
+  readonly teamBPlayer2: string;
+  readonly teamAScore: number;
+  readonly teamBScore: number;
+  readonly winner: ServingTeam;
+}
+
 /** Persisted shape written to localStorage */
 export interface PersistedGame {
   readonly version: 2;
@@ -56,6 +70,8 @@ export interface PersistedGame {
   readonly history: readonly GameSnapshot[];
   readonly winScore: number;
   readonly playerNames: PlayerNames;
+  readonly teamAColor?: TeamColor;
+  readonly teamBColor?: TeamColor;
   readonly gameOver: boolean;
   readonly winner: ServingTeam | null;
   readonly createdAt: string;
@@ -76,7 +92,8 @@ export type GameAction =
   | { readonly type: 'UNDO' }
   | { readonly type: 'RESET' }
   | { readonly type: 'SET_NAMES'; readonly names: PlayerNames }
-  | { readonly type: 'SET_WIN_SCORE'; readonly score: number };
+  | { readonly type: 'SET_WIN_SCORE'; readonly score: number }
+  | { readonly type: 'SET_COLORS'; readonly teamAColor: TeamColor; readonly teamBColor: TeamColor };
 
 /** View-layer state derived from the reducer */
 export interface GameView {

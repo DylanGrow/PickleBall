@@ -20,10 +20,116 @@ import type {
   ServingTeam,
   ServeState,
   Team,
+  TeamColor,
+  CompletedMatch,
 } from '../types/game';
 
 const STORAGE_KEY = 'pickleball_v2' as const;
+const HISTORY_STORAGE_KEY = 'pickleball_match_history_v2' as const;
 const DEFAULT_WIN_SCORE = 11 as const;
+
+export interface ColorTheme {
+  readonly bg: string;
+  readonly border: string;
+  readonly text: string;
+  readonly btn: string;
+  readonly hex: string;
+  readonly accent: string;
+  readonly hover: string;
+}
+
+export const COLOR_THEMES: Record<TeamColor, ColorTheme> = {
+  green: {
+    bg: 'bg-green-900/40 border-green-600',
+    border: 'border-green-600',
+    text: 'text-green-400',
+    btn: 'bg-green-600 hover:bg-green-500 active:bg-green-700 focus-visible:ring-green-400',
+    hex: '#16a34a',
+    accent: 'text-green-400',
+    hover: 'hover:bg-green-900/50 hover:border-green-500',
+  },
+  blue: {
+    bg: 'bg-blue-900/40 border-blue-600',
+    border: 'border-blue-600',
+    text: 'text-blue-400',
+    btn: 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 focus-visible:ring-blue-400',
+    hex: '#1d4ed8',
+    accent: 'text-blue-400',
+    hover: 'hover:bg-blue-900/50 hover:border-blue-500',
+  },
+  red: {
+    bg: 'bg-red-900/40 border-red-600',
+    border: 'border-red-600',
+    text: 'text-red-400',
+    btn: 'bg-red-600 hover:bg-red-500 active:bg-red-700 focus-visible:ring-red-400',
+    hex: '#dc2626',
+    accent: 'text-red-400',
+    hover: 'hover:bg-red-900/50 hover:border-red-500',
+  },
+  purple: {
+    bg: 'bg-purple-900/40 border-purple-600',
+    border: 'border-purple-600',
+    text: 'text-purple-400',
+    btn: 'bg-purple-600 hover:bg-purple-500 active:bg-purple-700 focus-visible:ring-purple-400',
+    hex: '#9333ea',
+    accent: 'text-purple-400',
+    hover: 'hover:bg-purple-900/50 hover:border-purple-500',
+  },
+  orange: {
+    bg: 'bg-orange-900/40 border-orange-600',
+    border: 'border-orange-600',
+    text: 'text-orange-400',
+    btn: 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700 focus-visible:ring-orange-400',
+    hex: '#ea580c',
+    accent: 'text-orange-400',
+    hover: 'hover:bg-orange-900/50 hover:border-orange-500',
+  },
+  amber: {
+    bg: 'bg-amber-900/40 border-amber-600',
+    border: 'border-amber-600',
+    text: 'text-amber-400',
+    btn: 'bg-amber-600 hover:bg-amber-500 active:bg-amber-700 focus-visible:ring-amber-400',
+    hex: '#d97706',
+    accent: 'text-amber-400',
+    hover: 'hover:bg-amber-900/50 hover:border-amber-500',
+  },
+  rose: {
+    bg: 'bg-rose-900/40 border-rose-600',
+    border: 'border-rose-600',
+    text: 'text-rose-400',
+    btn: 'bg-rose-600 hover:bg-rose-500 active:bg-rose-700 focus-visible:ring-rose-400',
+    hex: '#e11d48',
+    accent: 'text-rose-400',
+    hover: 'hover:bg-rose-900/50 hover:border-rose-500',
+  },
+  indigo: {
+    bg: 'bg-indigo-900/40 border-indigo-600',
+    border: 'border-indigo-600',
+    text: 'text-indigo-400',
+    btn: 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 focus-visible:ring-indigo-400',
+    hex: '#4f46e5',
+    accent: 'text-indigo-400',
+    hover: 'hover:bg-indigo-900/50 hover:border-indigo-500',
+  },
+};
+
+export function loadMatchHistory(): readonly CompletedMatch[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as readonly CompletedMatch[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveMatchHistory(history: readonly CompletedMatch[]): void {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // ignore quota errors
+  }
+}
 
 function makeId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -83,6 +189,8 @@ export function buildInitialPersistedGame(
     history: Object.freeze([] as readonly GameSnapshot[]),
     winScore,
     playerNames: Object.freeze(names),
+    teamAColor: 'green',
+    teamBColor: 'blue',
     gameOver: false,
     winner: null,
     createdAt: now,

@@ -1,10 +1,12 @@
 import type { Team, ServeState } from '../types/game';
+import type { ColorTheme } from '../logic/game';
 
 interface ScorePanelProps {
   readonly team: Team;
   readonly serve: ServeState;
   readonly isWinner: boolean;
   readonly gameOver: boolean;
+  readonly colorTheme: ColorTheme;
   readonly onScore: () => void;
 }
 
@@ -14,6 +16,7 @@ export function ScorePanel({
   serve,
   isWinner,
   gameOver,
+  colorTheme,
   onScore,
 }: ScorePanelProps) {
   const isServing = serve.servingTeam === team.id;
@@ -25,17 +28,10 @@ export function ScorePanel({
       : null;
 
   const teamLabel = team.id === 'teamA' ? 'Team A' : 'Team B';
-  const colorClass = team.id === 'teamA'
-    ? 'bg-green-900/40 border-green-600'
-    : 'bg-blue-900/40 border-blue-600';
-  const accentClass = team.id === 'teamA' ? 'text-green-400' : 'text-blue-400';
-  const btnClass = team.id === 'teamA'
-    ? 'bg-green-600 hover:bg-green-500 active:bg-green-700 focus-visible:ring-green-400'
-    : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 focus-visible:ring-blue-400';
-
-  const hoverClass = team.id === 'teamA'
-    ? 'hover:bg-green-900/50 hover:border-green-500'
-    : 'hover:bg-blue-900/50 hover:border-blue-500';
+  const colorClass = colorTheme.bg;
+  const accentClass = colorTheme.text;
+  const btnClass = colorTheme.btn;
+  const hoverClass = colorTheme.hover;
 
   return (
     <button

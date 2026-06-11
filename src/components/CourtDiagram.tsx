@@ -4,10 +4,18 @@ interface CourtDiagramProps {
   readonly teamA: Team;
   readonly teamB: Team;
   readonly serve: ServeState;
+  readonly teamAColorHex: string;
+  readonly teamBColorHex: string;
 }
 
 /** Secure SVG court diagram — zero innerHTML, all text via React nodes */
-export function CourtDiagram({ teamA, teamB, serve }: CourtDiagramProps) {
+export function CourtDiagram({
+  teamA,
+  teamB,
+  serve,
+  teamAColorHex,
+  teamBColorHex,
+}: CourtDiagramProps) {
   const isAServing = serve.servingTeam === 'teamA';
 
   // From net-viewer perspective: left = odd, right = even
@@ -26,7 +34,7 @@ export function CourtDiagram({ teamA, teamB, serve }: CourtDiagramProps) {
     team: 'a' | 'b'
   ) {
     const isServing = id === servingId;
-    const fill = team === 'a' ? '#16a34a' : '#1d4ed8';
+    const fill = team === 'a' ? teamAColorHex : teamBColorHex;
     const stroke = isServing ? '#fbbf24' : 'transparent';
     const initials = name
       .split(' ')
