@@ -1,9 +1,12 @@
 /**
  * useAnnouncer — offline text-to-speech for pickleball score announcements.
  * Uses the browser's built-in speechSynthesis API (no network required).
+ *
+ * Edge-safe: guards against rapid cancel/speak calls that crash Edge's
+ * speech engine. Announcer defaults to OFF — user must opt in.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 type ServerNumber = 1 | 2;
 
@@ -15,25 +18,47 @@ function getSupported(): boolean {
 
 function loadEnabled(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) !== 'off';
+    // Default OFF — user must opt in
+    return localStorage.getItem(STORAGE_KEY) === 'on';
   } catch {
-    return true;
+    return false;
   }
-}
-
-function speak(text: string): void {
-  const synth = window.speechSynthesis;
-  synth.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.9;
-  utterance.pitch = 1.1;
-  utterance.volume = 1;
-  synth.speak(utterance);
 }
 
 export function useAnnouncer() {
   const isSupported = getSupported();
   const [isEnabled, setIsEnabled] = useState(loadEnabled);
+  const speakingRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const safeSay = useCallback((text: string) => {
+    if (!isSupported) return;
+
+    // Debounce: don't overlap rapid calls (Edge crash prevention)
+    if (speakingRef.current) return;
+
+    try {
+      const synth = window.speechSynthesis;
+      // Cancel safely — some Edge versions throw on cancel()
+      try { synth.cancel(); } catch { /* ignore */ }
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+      utterance.volume = 1;
+
+      speakingRef.current = true;
+      utterance.onend = () => { speakingRef.current = false; };
+      utterance.onerror = () => { speakingRef.current = false; };
+
+      // Small delay before speaking — Edge needs a tick after cancel()
+      timeoutRef.current = setTimeout(() => {
+        try { synth.speak(utterance); } catch { speakingRef.current = false; }
+      }, 50);
+    } catch {
+      speakingRef.current = false;
+    }
+  }, [isSupported]);
 
   const toggle = useCallback(() => {
     setIsEnabled((prev) => {
@@ -45,33 +70,34 @@ export function useAnnouncer() {
 
   const announceScore = useCallback(
     (servingScore: number, receivingScore: number, serverNumber: ServerNumber, isFirstServe: boolean) => {
-      if (!isSupported || !isEnabled) return;
+      if (!isEnabled) return;
       if (isFirstServe) {
-        speak('Zero, zero, start');
+        safeSay('Zero, zero, start');
       } else {
-        speak(`${servingScore}, ${receivingScore}, ${serverNumber}`);
+        safeSay(`${servingScore}, ${receivingScore}, ${serverNumber}`);
       }
     },
-    [isSupported, isEnabled]
+    [isEnabled, safeSay]
   );
 
   const announceGameOver = useCallback(
     (winnerName: string) => {
-      if (!isSupported || !isEnabled) return;
-      speak(`Game! ${winnerName} wins!`);
+      if (!isEnabled) return;
+      safeSay(`Game! ${winnerName} wins!`);
     },
-    [isSupported, isEnabled]
+    [isEnabled, safeSay]
   );
 
   const announceSideOut = useCallback(() => {
-    if (!isSupported || !isEnabled) return;
-    speak('Side out');
-  }, [isSupported, isEnabled]);
+    if (!isEnabled) return;
+    safeSay('Side out');
+  }, [isEnabled, safeSay]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isSupported) window.speechSynthesis.cancel();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      try { if (isSupported) window.speechSynthesis.cancel(); } catch { /* ignore */ }
     };
   }, [isSupported]);
 
