@@ -96,6 +96,11 @@ export function useAnnouncer() {
     safeSay('Side out');
   }, [isEnabled, safeSay]);
 
+  const announceConfig = useCallback((winScore: number) => {
+    if (!isEnabled) return;
+    safeSay(`Game started. First to ${winScore} points. Win by 2.`);
+  }, [isEnabled, safeSay]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -104,5 +109,5 @@ export function useAnnouncer() {
     };
   }, [isSupported]);
 
-  return { announceScore, announceGameOver, announceSideOut, isEnabled, toggle, isSupported };
+  return { announceScore, announceGameOver, announceSideOut, announceConfig, isEnabled, toggle, isSupported };
 }

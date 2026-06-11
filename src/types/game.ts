@@ -61,6 +61,7 @@ export interface CompletedMatch {
   readonly teamAScore: number;
   readonly teamBScore: number;
   readonly winner: ServingTeam;
+  readonly durationMinutes?: number;
 }
 
 /** Persisted shape written to localStorage */

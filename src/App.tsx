@@ -4,6 +4,7 @@ import { useAnnouncer } from './hooks/useAnnouncer';
 import { ScorePanel } from './components/ScorePanel';
 import { CourtDiagram } from './components/CourtDiagram';
 import { SettingsModal } from './components/SettingsModal';
+import { HelpModal } from './components/HelpModal';
 import type { PlayerNames, TeamColor, CompletedMatch } from './types/game';
 import { COLOR_THEMES, loadMatchHistory, saveMatchHistory } from './logic/game';
 
@@ -20,9 +21,12 @@ function triggerHaptic() {
 export default function App() {
   const { state, dispatch } = useGameState();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'scorer' | 'history' | 'stats'>('scorer');
   const [matches, setMatches] = useState<readonly CompletedMatch[]>(() => loadMatchHistory());
   const announcer = useAnnouncer();
+  const [isScreenAwake, setIsScreenAwake] = useState(false);
+  const [statsSort, setStatsSort] = useState<'winRate' | 'games' | 'wins'>('winRate');
 
   const { current, gameOver, winner, winScore, playerNames, history } = state;
   const { teamA, teamB, serve } = current;
@@ -60,6 +64,8 @@ export default function App() {
     if (gameOver && winner) {
       const matchExists = matches.some((m) => m.id === state.createdAt);
       if (!matchExists) {
+        const durationMs = Date.now() - new Date(state.createdAt).getTime();
+        const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
         const newMatch: CompletedMatch = {
           id: state.createdAt,
           date: new Date(state.createdAt).toLocaleDateString(undefined, {
@@ -76,6 +82,7 @@ export default function App() {
           teamAScore: teamA.score,
           teamBScore: teamB.score,
           winner,
+          durationMinutes,
         };
         const updated = Object.freeze([...matches, newMatch]);
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -105,9 +112,61 @@ export default function App() {
       dispatch({ type: 'SET_NAMES', names });
       dispatch({ type: 'SET_WIN_SCORE', score });
       dispatch({ type: 'SET_COLORS', teamAColor: aColor, teamBColor: bColor });
+      announcer.announceConfig(score);
     },
-    [dispatch]
+    [dispatch, announcer]
   );
+
+  const handleShareMatch = useCallback((m: CompletedMatch) => {
+    const text = `🏓 Pickleball Match Result!\nTeam A (${m.teamAPlayer1} & ${m.teamAPlayer2}): ${m.teamAScore}\nTeam B (${m.teamBPlayer1} & ${m.teamBPlayer2}): ${m.teamBScore}\nWinner: ${m.winner === 'teamA' ? 'Team A' : 'Team B'} 🏆\n${m.durationMinutes ? `Duration: ${m.durationMinutes} min\n` : ''}Scored with Pickleball Scorekeeper.`;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({
+        title: 'Pickleball Match Result',
+        text: text,
+      }).catch((err) => {
+        console.warn('Web Share failed:', err);
+      });
+    } else {
+      try {
+        navigator.clipboard.writeText(text);
+        alert('Match results copied to clipboard!');
+      } catch {
+        alert('Failed to copy to clipboard.');
+      }
+    }
+  }, []);
+
+  const handleExportHistoryCSV = useCallback(() => {
+    if (matches.length === 0) return;
+
+    const headers = ['Date', 'Duration (min)', 'Team A Player 1', 'Team A Player 2', 'Team B Player 1', 'Team B Player 2', 'Team A Score', 'Team B Score', 'Winner'];
+    const rows = matches.map((m) => [
+      m.date,
+      m.durationMinutes || '',
+      m.teamAPlayer1,
+      m.teamAPlayer2,
+      m.teamBPlayer1,
+      m.teamBPlayer2,
+      m.teamAScore,
+      m.teamBScore,
+      m.winner === 'teamA' ? 'Team A' : 'Team B',
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `pickleball_history_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [matches]);
 
   // Screen Wake Lock API to prevent device sleeping during games
   useEffect(() => {
@@ -119,9 +178,14 @@ export default function App() {
         if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           wakeLock = await (navigator as any).wakeLock.request('screen');
+          setIsScreenAwake(true);
+          wakeLock.addEventListener('release', () => {
+            setIsScreenAwake(false);
+          });
         }
       } catch (err) {
         console.warn('Wake Lock request failed:', err);
+        setIsScreenAwake(false);
       }
     };
 
@@ -203,8 +267,16 @@ export default function App() {
         winRate: data.games > 0 ? (data.wins / data.games) * 100 : 0,
         avgPoints: data.games > 0 ? data.points / data.games : 0,
       }))
-      .sort((a, b) => b.winRate - a.winRate || b.wins - a.wins);
-  }, [matches]);
+      .sort((a, b) => {
+        if (statsSort === 'games') {
+          return b.games - a.games || b.winRate - a.winRate;
+        } else if (statsSort === 'wins') {
+          return b.wins - a.wins || b.winRate - a.winRate;
+        } else {
+          return b.winRate - a.winRate || b.wins - a.wins;
+        }
+      });
+  }, [matches, statsSort]);
 
   // Dynamic live rules helper values
   const rulesCheck = useMemo(() => {
@@ -289,6 +361,12 @@ export default function App() {
             <span className="text-zinc-500 text-xs hidden sm:inline">
               {'Rally #' + String(current.rallyCount)}
             </span>
+            {isScreenAwake && (
+              <span className="text-[10px] font-bold text-yellow-400 bg-yellow-950/80 border border-yellow-800/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                Keep Screen On
+              </span>
+            )}
 
             {/* Announcer toggle button */}
             {announcer.isSupported && (
@@ -340,6 +418,17 @@ export default function App() {
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden="true">
                 <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.389zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors cursor-pointer"
+              aria-label="Open rules and FAQ help"
+              title="Rules & FAQ"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden="true">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5A1 1 0 117.465 6.4 3 3 0 1112 9a1.5 1.5 0 00-.75 1.3v.2a1 1 0 11-2 0v-.2A3.5 3.5 0 0113 6.8a3 3 0 01-3.003.2zM11 13a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
               </svg>
             </button>
             <button
@@ -476,15 +565,26 @@ export default function App() {
           <section aria-label="Match History" className="flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
               <h2 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Completed Matches</h2>
-              {matches.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearHistory}
-                  className="text-xs text-red-400 hover:text-red-300 font-bold hover:underline cursor-pointer"
-                >
-                  Clear All
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {matches.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleExportHistoryCSV}
+                      className="text-xs text-yellow-400 hover:text-yellow-300 font-bold hover:underline cursor-pointer"
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearHistory}
+                      className="text-xs text-red-400 hover:text-red-300 font-bold hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {matches.length === 0 ? (
@@ -506,15 +606,28 @@ export default function App() {
                     className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3 relative"
                   >
                     <div className="flex justify-between items-center text-[10px] text-zinc-500 border-b border-zinc-800/60 pb-1.5">
-                      <span>{m.date}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMatch(m.id)}
-                        className="text-red-500 hover:text-red-400 font-bold cursor-pointer"
-                        aria-label="Delete match from history"
-                      >
-                        Delete
-                      </button>
+                      <span>
+                        {m.date}
+                        {m.durationMinutes ? ` • ${m.durationMinutes} min` : ''}
+                      </span>
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleShareMatch(m)}
+                          className="text-yellow-400 hover:text-yellow-300 font-bold cursor-pointer"
+                          aria-label="Share match results"
+                        >
+                          Share
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMatch(m.id)}
+                          className="text-red-500 hover:text-red-400 font-bold cursor-pointer"
+                          aria-label="Delete match from history"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 items-center">
@@ -537,11 +650,11 @@ export default function App() {
                     </div>
 
                     <div className="flex items-center justify-center gap-4 py-1">
-                      <span className={`text-3xl font-black ${m.winner === 'teamA' ? 'text-white' : 'text-zinc-500'}`}>
+                      <span className={`text-3xl font-black ${m.winner === 'teamA' ? COLOR_THEMES[teamAColor].text : 'text-zinc-500'}`}>
                         {m.teamAScore}
                       </span>
                       <span className="text-zinc-600 font-bold text-sm">—</span>
-                      <span className={`text-3xl font-black ${m.winner === 'teamB' ? 'text-white' : 'text-zinc-500'}`}>
+                      <span className={`text-3xl font-black ${m.winner === 'teamB' ? COLOR_THEMES[teamBColor].text : 'text-zinc-500'}`}>
                         {m.teamBScore}
                       </span>
                     </div>
@@ -567,12 +680,33 @@ export default function App() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="bg-zinc-800/50 text-zinc-400 font-bold uppercase tracking-wider border-b border-zinc-800">
+                      <tr className="bg-zinc-800/50 text-zinc-400 font-bold uppercase tracking-wider border-b border-zinc-800 select-none">
                         <th className="p-3">Player</th>
-                        <th className="p-3 text-center">Played</th>
-                        <th className="p-3 text-center">Wins</th>
+                        <th
+                          onClick={() => setStatsSort('games')}
+                          className={`p-3 text-center cursor-pointer hover:text-zinc-200 ${statsSort === 'games' ? 'text-yellow-300 font-black' : ''}`}
+                          role="columnheader"
+                          aria-sort={statsSort === 'games' ? 'descending' : 'none'}
+                        >
+                          Played {statsSort === 'games' && '▼'}
+                        </th>
+                        <th
+                          onClick={() => setStatsSort('wins')}
+                          className={`p-3 text-center cursor-pointer hover:text-zinc-200 ${statsSort === 'wins' ? 'text-yellow-300 font-black' : ''}`}
+                          role="columnheader"
+                          aria-sort={statsSort === 'wins' ? 'descending' : 'none'}
+                        >
+                          Wins {statsSort === 'wins' && '▼'}
+                        </th>
                         <th className="p-3 text-center">Losses</th>
-                        <th className="p-3 text-center">Win Rate</th>
+                        <th
+                          onClick={() => setStatsSort('winRate')}
+                          className={`p-3 text-center cursor-pointer hover:text-zinc-200 ${statsSort === 'winRate' ? 'text-yellow-300 font-black' : ''}`}
+                          role="columnheader"
+                          aria-sort={statsSort === 'winRate' ? 'descending' : 'none'}
+                        >
+                          Win Rate {statsSort === 'winRate' && '▼'}
+                        </th>
                         <th className="p-3 text-center">Avg Points</th>
                       </tr>
                     </thead>
@@ -612,6 +746,12 @@ export default function App() {
         teamAColor={teamAColor}
         teamBColor={teamBColor}
         onSave={handleSaveSettings}
+      />
+
+      <HelpModal
+        key={helpOpen ? 'open' : 'closed'}
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
       />
     </div>
   );

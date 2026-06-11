@@ -51,10 +51,10 @@ export function SettingsModal({
 
   const handleSave = useCallback(() => {
     const trimmedNames = Object.freeze({
-      teamAPlayer1: names.teamAPlayer1.trim(),
-      teamAPlayer2: names.teamAPlayer2.trim(),
-      teamBPlayer1: names.teamBPlayer1.trim(),
-      teamBPlayer2: names.teamBPlayer2.trim(),
+      teamAPlayer1: names.teamAPlayer1.trim() || 'Player 1',
+      teamAPlayer2: names.teamAPlayer2.trim() || 'Player 2',
+      teamBPlayer1: names.teamBPlayer1.trim() || 'Player 3',
+      teamBPlayer2: names.teamBPlayer2.trim() || 'Player 4',
     });
     onSave(trimmedNames, score, aColor, bColor);
     onClose();

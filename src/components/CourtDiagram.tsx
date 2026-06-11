@@ -103,8 +103,30 @@ export function CourtDiagram({
       <rect x={10} y={5} width={180} height={140} rx={4} fill="#064e3b" />
 
       {/* Kitchen (NVZ) lines */}
-      <rect x={10} y={50} width={180} height={15} fill="#065f46" opacity={0.6} />
-      <rect x={10} y={85} width={180} height={15} fill="#065f46" opacity={0.6} />
+      <rect
+        x={10}
+        y={50}
+        width={180}
+        height={15}
+        fill="#065f46"
+        opacity={0.6}
+        className="cursor-help transition-opacity hover:opacity-80"
+        onClick={() => alert("Non-Volley Zone (Kitchen) Rule: You cannot volley the ball (hit it out of the air) while standing inside the Kitchen or touching any Kitchen line. You may only enter the Kitchen to play a ball that has already bounced.")}
+      >
+        <title>Non-Volley Zone (Kitchen) - Click for Rules</title>
+      </rect>
+      <rect
+        x={10}
+        y={85}
+        width={180}
+        height={15}
+        fill="#065f46"
+        opacity={0.6}
+        className="cursor-help transition-opacity hover:opacity-80"
+        onClick={() => alert("Non-Volley Zone (Kitchen) Rule: You cannot volley the ball (hit it out of the air) while standing inside the Kitchen or touching any Kitchen line. You may only enter the Kitchen to play a ball that has already bounced.")}
+      >
+        <title>Non-Volley Zone (Kitchen) - Click for Rules</title>
+      </rect>
 
       {/* Net */}
       <line x1={10} y1={75} x2={190} y2={75} stroke="#6ee7b7" strokeWidth={2} />
