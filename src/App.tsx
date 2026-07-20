@@ -5,6 +5,7 @@ import { ScorePanel } from './components/ScorePanel';
 import { CourtDiagram } from './components/CourtDiagram';
 import { SettingsModal } from './components/SettingsModal';
 import { HelpModal } from './components/HelpModal';
+import { BrandLogo } from './components/BrandLogo';
 import type { PlayerNames, TeamColor, CompletedMatch } from './types/game';
 import { COLOR_THEMES, loadMatchHistory, saveMatchHistory } from './logic/game';
 
@@ -345,17 +346,9 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col safe-area-bottom">
       <header className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur-sm border-b border-zinc-800 safe-area-top">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg viewBox="0 0 24 24" className="w-7 h-7" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" fill="#16a34a" />
-              <path d="M12 6 C9 6 6 9 6 12" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              <path d="M12 6 C15 6 18 9 18 12" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              <path d="M6 12 C6 15 9 18 12 18" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              <path d="M18 12 C18 15 15 18 12 18" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              <circle cx="12" cy="12" r="2" fill="white" />
-            </svg>
-            <span className="font-black text-lg tracking-tight text-white">Pickleball</span>
-            <span className="text-zinc-500 text-sm font-medium hidden sm:inline">Scorekeeper</span>
+          <div className="flex items-center gap-2.5">
+            <BrandLogo className="h-8 w-auto hover:opacity-90 transition-opacity cursor-pointer" />
+            <span className="text-zinc-500 text-xs font-semibold uppercase tracking-wider hidden sm:inline border-l border-zinc-800 pl-2.5">Scorekeeper</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-zinc-500 text-xs hidden sm:inline">
